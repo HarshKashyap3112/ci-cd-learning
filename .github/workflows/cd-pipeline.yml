@@ -1,0 +1,80 @@
+name: CD Pipeline to AWS App Runner (Staging and Production)
+
+on:
+  push:
+    branches:
+      - staging
+  workflow_dispatch: {}
+  release:
+    types:
+      - published
+
+env:
+  PORT: 5001
+  IMAGE: ${{ vars.IMAGE }}:${{ github.sha }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Setup, test, and build project
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Test application
+        run: npm test
+
+  build-and-deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    name: Build, Push to Docker Hub, and Deploy to AWS
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Authenticate for Docker Hub
+        env:
+          D_USER: ${{ secrets.DOCKER_USER }}
+          D_PASS: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          docker login -u $D_USER -p $D_PASS
+
+      - name: Build and tag Image
+        run: |
+          docker build -t ${{ env.IMAGE }} .
+
+      - name: Push the image to Docker Hub
+        run: |
+          docker push ${{ env.IMAGE }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Deploy to AWS App Runner - Staging
+        if: github.ref != 'refs/heads/main'
+        uses: awslabs/amazon-app-runner-deploy@main
+        with:
+          service: ${{ vars.AWS_STAGING_SERVICE_NAME }}
+          image: ${{ env.IMAGE }}
+          region: ${{ vars.AWS_REGION }}
+          cpu: 1
+          memory: 2
+          port: ${{ env.PORT }}
+
+      - name: Deploy to AWS App Runner - Production
+        if: github.event_name == 'release' && github.event.action == 'published' && github.event.release.target_commitish == 'main'
+        uses: awslabs/amazon-app-runner-deploy@main
+        with:
+          service: ${{ vars.AWS_PRODUCTION_SERVICE_NAME }}
+          image: ${{ env.IMAGE }}
+          region: ${{ vars.AWS_REGION }}
+          cpu: 1
+          memory: 2
+          port: ${{ env.PORT }}
