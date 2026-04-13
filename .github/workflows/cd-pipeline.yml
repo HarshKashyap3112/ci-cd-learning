@@ -60,7 +60,7 @@ jobs:
         uses: awslabs/amazon-app-runner-deploy@main
         with:
           service: ${{ vars.AWS_STAGING_SERVICE_NAME }}
-          image: ${{ env.IMAGE_URI }}
+          image: ${{ vars.IMAGE }}
           access-role-arn: ${{ secrets.APP_RUNNER_ROLE_ARN }}
           region: ${{ vars.AWS_REGION }}
           cpu: 1
@@ -72,7 +72,7 @@ jobs:
         uses: awslabs/amazon-app-runner-deploy@main
         with:
           service: ${{ vars.AWS_PRODUCTION_SERVICE_NAME }}
-          image: ${{ env.IMAGE_URI }}
+          image: ${{ vars.IMAGE }}
           access-role-arn: ${{ secrets.APP_RUNNER_ROLE_ARN }}
           region: ${{ vars.AWS_REGION }}
           cpu: 1
